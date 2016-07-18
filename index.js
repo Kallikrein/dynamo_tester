@@ -27,9 +27,9 @@ global.stage = "test";
 
 const CONDITION = 'attribute_not_exists (email)';
 const SIZE = argv.size || argv.s || 1;
-const CONCURRENT = argv.concurrent || argv.c || 1;
+const FREQUENCY = argv.frequency || argv.f || 1;
 
-console.log("launching ", SIZE, " tests with concurrency at ", CONCURRENT);
+console.log("launching ", SIZE, " at ", FREQUENCY, " request per second");
 
 
 function get (obj, cb) {
@@ -65,31 +65,38 @@ function create (obj, cb) {
 		}
 	});
 }
+
+function del (obj, cb) {
+	const TABLE = TABLES[global.stage];
+	dynamo.deleteItem({
+		TableName: TABLE,
+		Key: obj
+	}, function (err) {});
+}
 var completed = 0;
 let times = [];
 for (let index = 0; index < SIZE; index++) {
 	times[index] = index;
 }
-async.mapLimit(times, CONCURRENT, function (index, callback) {
-	let time = process.hrtime();
-	create({email: "key"+index, key: "value"}, function () {
-		let end = process.hrtime(time);
-		// console.log("index", index);
-		// console.log("time", end);
-		completed++;
-		process.stdout.clearLine();
-		process.stdout.cursorTo(0);
-		process.stdout.write('Percent : ' + Math.floor(completed / SIZE * 100));
-		callback(null, 1000000000 * end[0] + end [1]);
-		dynamo.deleteItem({Key: "key"+index});
-	});
+const START = process.hrtime();
+
+async.map(times, function (index, callback) {
+	let diff = process.hrtime(START);
+	let delay = 1000 * (index / FREQUENCY - diff[0]) - Math.floor(diff[1] / 1000000);
+	setTimeout(function () {
+		let time = process.hrtime();
+		create({email: "key"+index, key: "value"}, function () {
+			let end = process.hrtime(time);
+			completed++;
+			process.stdout.clearLine();
+			process.stdout.cursorTo(0);
+			process.stdout.write('Percent : ' + Math.floor(completed / SIZE * 100));
+			callback(null, 1000000000 * end[0] + end [1]);
+			del({email: "key"+index});
+		});
+	}, delay);
 }, function (err, array) {
-	var sum = array.reduce(function (p, c) {
-		// console.log("p", p);
-		// console.log("c", c);
-		return p + c;
-	});
-	console.log("sum", sum);
+	var sum = array.reduce(function (p, c) {return p + c;});
 	var seconds = Math.floor(sum / 1000000) / 1000;
 	console.log("total time : ", seconds);
 	console.log("average time : ", seconds / SIZE);
