@@ -15,15 +15,15 @@ let dynamo = new doc.DynamoDB();
 let async = require('async');
 
 const TABLES = {
-dev: "localAuth",
-     prod: "user",
-     test: "test_user"
+	dev: "localAuth",
+	prod: "user",
+	test: "test_user"
 };
 global.stage = "test";
 
 const CONDITION = 'attribute_not_exists (email)';
 const SIZE = 1000;
-const LIMIT = 5;
+const LIMIT = 1;
 
 var getType = function (elem) {
 	return Object.prototype.toString.call(elem).slice(8, -1);
@@ -32,42 +32,61 @@ var getType = function (elem) {
 function get (obj, cb) {
 	const TABLE = TABLES[global.stage];
 	dynamo.getItem({
-TableName: TABLE,
-Key: {
-email: obj.credentials.email
-}
-}, function (err, data) {
-if (err) {
-return cb(errors.internal('dynamo Access', err));
-}
-if ('Item' in data) {
-obj.credentials.hash = data.Item.hash;
-return cb(null, obj);
-}
-return cb(errors.notFound('email', obj.credentials.email));
-});
+		TableName: TABLE,
+		Key: {
+			email: obj.credentials.email
+		}
+	}, function (err, data) {
+		if (err) {
+			return cb(errors.internal('dynamo Access', err));
+		}
+		if ('Item' in data) {
+			obj.credentials.hash = data.Item.hash;
+			return cb(null, obj);
+		}
+		return cb(errors.notFound('email', obj.credentials.email));
+	});
 }
 
 function create (obj, cb) {
 	const TABLE = TABLES[global.stage];
 	dynamo.putItem({
 		TableName: TABLE,
-	Item: obj,
-	ConditionExpression: CONDITION
-}, function (err) {
-if (err) {
-	cb(errors.dynamo.create(err, CONDITION));
-} else {
-cb(null, {email: obj.email});
+		Item: obj,
+		ConditionExpression: CONDITION
+	}, function (err) {
+		if (err) {
+			cb(err);
+		} else {
+			cb(null, {email: obj.email});
+		}
+	});
 }
-});
-}
+var completed = 0;
 let times = [];
 for (let index = 0; index < SIZE; index++) {
 	times[index] = index;
 }
-async.mapLimit(times, LIMIT, function (index) {
-
-	
-
-}, function (err, array) {});
+async.mapLimit(times, LIMIT, function (index, callback) {
+	let time = process.hrtime();
+	create({email: "key"+index, key: "value"}, function () {
+		let end = process.hrtime(time);
+		// console.log("index", index);
+		// console.log("time", end);
+		completed++;
+		process.stdout.clearLine();
+		process.stdout.cursorTo(0);
+		process.stdout.write('Percent : ' + Math.floor(completed / SIZE * 100));
+		callback(null, 1000000000 * end[0] + end [1]);
+	});
+}, function (err, array) {
+	var sum = array.reduce(function (p, c) {
+		// console.log("p", p);
+		// console.log("c", c);
+		return p + c;
+	});
+	console.log("sum", sum);
+	var seconds = Math.floor(sum / 1000000) / 1000;
+	console.log("total time : ", seconds);
+	console.log("average time : ", seconds / SIZE);
+});
