@@ -1,5 +1,7 @@
 "use strict";
-console.log("Dynamo stress test runner");
+console.log("Dynamo DB stress test runner");
+console.log('version : ', process.env.npm_package_version);
+
 if (!process.env.AWS_ACCESS_KEY_ID) {
 	throw new Error('Missing environment variable : AWS_ACCESS_KEY_ID');
 }
@@ -13,7 +15,9 @@ if (!process.env.AWS_REGION) {
 let doc = require('dynamodb-doc');
 let dynamo = new doc.DynamoDB();
 let async = require('async');
+let minimist = require('minimist');
 
+const argv = minimist(process.argv.slice(2));
 const TABLES = {
 	dev: "localAuth",
 	prod: "user",
@@ -22,12 +26,11 @@ const TABLES = {
 global.stage = "test";
 
 const CONDITION = 'attribute_not_exists (email)';
-const SIZE = 10000;
-const LIMIT = 20;
+const SIZE = argv.size || argv.s || 1;
+const CONCURRENT = argv.concurrent || argv.c || 1;
 
-var getType = function (elem) {
-	return Object.prototype.toString.call(elem).slice(8, -1);
-};
+console.log("launching ", SIZE, " tests with concurrency at ", CONCURRENT);
+
 
 function get (obj, cb) {
 	const TABLE = TABLES[global.stage];
@@ -67,7 +70,7 @@ let times = [];
 for (let index = 0; index < SIZE; index++) {
 	times[index] = index;
 }
-async.mapLimit(times, LIMIT, function (index, callback) {
+async.mapLimit(times, CONCURRENT, function (index, callback) {
 	let time = process.hrtime();
 	create({email: "key"+index, key: "value"}, function () {
 		let end = process.hrtime(time);
