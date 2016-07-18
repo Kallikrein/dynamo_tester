@@ -22,8 +22,8 @@ const TABLES = {
 global.stage = "test";
 
 const CONDITION = 'attribute_not_exists (email)';
-const SIZE = 1000;
-const LIMIT = 1;
+const SIZE = 10000;
+const LIMIT = 20;
 
 var getType = function (elem) {
 	return Object.prototype.toString.call(elem).slice(8, -1);
@@ -78,6 +78,7 @@ async.mapLimit(times, LIMIT, function (index, callback) {
 		process.stdout.cursorTo(0);
 		process.stdout.write('Percent : ' + Math.floor(completed / SIZE * 100));
 		callback(null, 1000000000 * end[0] + end [1]);
+		dynamo.deleteItem({Key: "key"+index});
 	});
 }, function (err, array) {
 	var sum = array.reduce(function (p, c) {
